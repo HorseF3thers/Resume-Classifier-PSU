@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[2]:
 
 
 """
@@ -24,6 +24,7 @@ Resume Classifier
 
 
 import os
+import gc
 import pandas as pd
 
 from CNN_for_comparison import run_cnn
@@ -70,7 +71,18 @@ def run_hyperparameter_sweep():
                 num_epochs=num_epochs,
                 batch_size=CNN_BASE_PARAMS["batch_size"],
             )
-            experiments.append(cnn_res)
+
+            # Keep only the metrics we need for the table to reduce memory usage
+            experiments.append({
+                "model_name": cnn_res["model_name"],
+                "max_len": cnn_res["max_len"],
+                "num_epochs": cnn_res["num_epochs"],
+                "accuracy": cnn_res["accuracy"],
+                "f1": cnn_res["f1"],
+                "total_training_time": cnn_res["total_training_time"],
+            })
+
+            gc.collect()
 
             # --- BERT ---
             print(f"\n=== Running BERT (max_len={max_len}, num_epochs={num_epochs}) ===")
@@ -80,7 +92,17 @@ def run_hyperparameter_sweep():
                 num_epochs=num_epochs,
                 batch_size=BERT_BASE_PARAMS["batch_size"],
             )
-            experiments.append(bert_res)
+
+            experiments.append({
+                "model_name": bert_res["model_name"],
+                "max_len": bert_res["max_len"],
+                "num_epochs": bert_res["num_epochs"],
+                "accuracy": bert_res["accuracy"],
+                "f1": bert_res["f1"],
+                "total_training_time": bert_res["total_training_time"],
+            })
+
+            gc.collect()
 
     # Build a summary DataFrame of all experiment runs
     rows = []
