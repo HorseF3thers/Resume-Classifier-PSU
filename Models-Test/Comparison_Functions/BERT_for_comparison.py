@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
-
-
 """
 BERT model wrapped in a function for comparison to CNN
 Mitchell Readinger
@@ -11,10 +8,6 @@ CMPSC 445
 Final Project
 Resume Classifier
 """
-
-
-# In[ ]:
-
 
 # Imports
 
@@ -38,8 +31,7 @@ from sklearn.manifold import TSNE
 import plotly.graph_objects as go
 import plotly.express as px
 
-
-# In[5]:
+from tqdm.auto import tqdm  # NEW: progress bar
 
 
 class ResumeDataset(torch.utils.data.Dataset):
@@ -67,9 +59,6 @@ class ResumeDataset(torch.utils.data.Dataset):
         }
 
 
-# In[9]:
-
-
 def run_bert(
     csv_path,
     max_len=256,
@@ -77,7 +66,7 @@ def run_bert(
     num_epochs=5,
     lr=2e-5,
     random_state=42,
-    onnx_model_path=None # Team: Point to a directory if you want the ONNX file, but know that it will be overwritten each call during comparison
+    onnx_model_path=None  # Team: Point to a directory if you want the ONNX file, but know that it will be overwritten each call during comparison
 ):
     # Load CSV
     df = pd.read_csv(
@@ -104,7 +93,7 @@ def run_bert(
     # Tokenizer
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-    # Datasets + loaders 
+    # Datasets + loaders
     train_dataset = ResumeDataset(train_texts, train_labels, tokenizer, max_len=max_len)
     val_dataset   = ResumeDataset(val_texts,  val_labels,  tokenizer, max_len=max_len)
     test_dataset  = ResumeDataset(test_texts, test_labels, tokenizer, max_len=max_len)
@@ -121,7 +110,7 @@ def run_bert(
 
     optimizer = optim.AdamW(model.parameters(), lr=lr)
 
-    # Training loop with timing 
+    # Training loop with timing
     print("=== Training Environment Info ===")
     print(f"Python version: {platform.python_version()}")
     print(f"OS: {platform.platform()}")
@@ -142,13 +131,21 @@ def run_bert(
     history = []
     epoch_times = []
     training_start_time = time.time()
+    num_batches = len(train_loader)
 
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0.0
         epoch_start = time.time()
 
-        for batch in train_loader:
+        # NEW: tqdm progress bar over training batches
+        pbar = tqdm(
+            train_loader,
+            desc=f"[BERT] Epoch {epoch + 1}/{num_epochs}",
+            leave=False
+        )
+
+        for step, batch in enumerate(pbar):
             optimizer.zero_grad()
 
             input_ids      = batch['input_ids'].to(device)
@@ -166,19 +163,22 @@ def run_bert(
 
             total_loss += loss.item()
 
+            # Update bar with current loss
+            pbar.set_postfix({"loss": float(loss.item())})
+
         epoch_duration = time.time() - epoch_start
         epoch_times.append(epoch_duration)
 
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = total_loss / num_batches
         history.append(avg_loss)
         print(
             f"[BERT] Epoch {epoch + 1}/{num_epochs} - "
-            f"[BERT] Training Loss: {avg_loss:.4f} - "
-            f"[BERT] Epoch Time: {epoch_duration:.2f} sec"
+            f"Training Loss: {avg_loss:.4f} - "
+            f"Epoch Time: {epoch_duration:.2f} sec"
         )
 
     total_training_time = time.time() - training_start_time
-    print(f"\nTotal training time: {total_training_time:.2f} sec "
+    print(f"\n[BERT] Total training time: {total_training_time:.2f} sec "
           f"({total_training_time/60:.2f} min)\n")
 
     # Evaluate on test set
@@ -202,8 +202,8 @@ def run_bert(
     accuracy = accuracy_score(all_labels, all_preds)
     f1 = f1_score(all_labels, all_preds, average='weighted')
 
-    print(f"Test Accuracy: {accuracy:.4f}")
-    print(f"Test F1 Score: {f1:.4f}")
+    print(f"[BERT] Test Accuracy: {accuracy:.4f}")
+    print(f"[BERT] Test F1 Score: {f1:.4f}")
 
     # Per-class report for later visualizations/comparisons
     labels_idx = np.arange(num_labels)
@@ -216,7 +216,7 @@ def run_bert(
         zero_division=0
     )
 
-    # ONNX export 
+    # ONNX export
     if onnx_model_path is not None:
         sample_text = "sample resume text."
         encoding = tokenizer(
@@ -245,7 +245,7 @@ def run_bert(
         )
         print(f"Model saved to {onnx_model_path}")
 
-    # Return everything 
+    # Return everything
     return {
         "model_name": "bert",
         "model": model,
@@ -264,19 +264,7 @@ def run_bert(
         "history": history,
     }
 
-
-# In[ ]:
-
-
 # Test function call
-# Make sure to comment this our before calling from the comparison!!!
-
+# Make sure to comment this out before calling from the comparison!!!
 # csv_path = r"C:\Users\mshar\Desktop\School Fall 2025\CMPSC 445\Final Project\models\data\Resume.csv"
 # bert_result = run_bert(csv_path=csv_path)
-
-
-# In[ ]:
-
-
-
-
