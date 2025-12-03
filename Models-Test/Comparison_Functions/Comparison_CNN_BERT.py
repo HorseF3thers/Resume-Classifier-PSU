@@ -6,6 +6,7 @@
 
 """
 Comparison imports and runs both CNN and BERT models
+Visualizations using various data investigation tools
 Mitch Readinger
 CMPSC 445
 Final Project
@@ -26,6 +27,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+import nltk
+from IPython.display import display
+
 from sklearn.metrics import (
     classification_report,
     confusion_matrix
@@ -38,14 +42,14 @@ from BERT_for_comparison import ResumeDataset
 
 
 
-# If the .py files are in a different folder, add that folder to sys.path here.
+# TEAM: If the .py files are in a different folder, add that folder to sys.path here.
 # Example if they live in ../models:
 # sys.path.append(os.path.abspath("../models"))
 
 from CNN_for_comparison import run_cnn
 from BERT_for_comparison import run_bert
 
-# Path to the CSV (team: please update to your file structure)
+# Path to the CSV (TEAM: please update to your file structure)
 csv_path = r"C:\Users\mshar\Desktop\School Fall 2025\CMPSC 445\Final Project\models\data\Resume.csv"
 
 # Global hyperparameters for this comparison run
@@ -69,6 +73,12 @@ BERT_PARAMS = {
 
 
 # Peek at the CSV
+
+# Class Distribution Bar Chart
+# Library: Plotly Express (px.bar)
+# Title: "Class Distribution in Resume Dataset"
+# What it shows: Count of resumes in each Category from Resume.csv (x = category, y = count).
+# Purpose: Show class imbalance before modeling.
 
 df = pd.read_csv(csv_path)
 print("Shape:", df.shape)
@@ -94,12 +104,97 @@ fig_eda.update_layout(xaxis_tickangle=-45)
 fig_eda.show()
 
 
-# In[ ]:
+# In[4]:
 
 
+# Example Resume Parse Tree with NLTK
+
+# Library: NLTK (tokenizers, POS tagger, RegexpParser)
+# What it shows: A shallow chunk parse tree (NP / VP / PP / CLAUSE) for a small window
+# of tokens taken from the first sentence of a single resume.
+# Data: One row from df (index example_idx) using the "Resume_str" text and "Category"
+# label; uses sent_tokenize : word_tokenize : pos_tag on the first sentence, then
+# applies a custom chunk grammar and prints both ASCII and bracketed tree output.
+
+
+# Ensure required NLTK resources are available (handles old + new names)
+needed_resources = [
+    ("tokenizers/punkt", "punkt"),
+    ("tokenizers/punkt_tab", "punkt_tab"),  # newer punkt tables
+    ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+    ("taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"),
+]
+
+for path, name in needed_resources:
+    try:
+        nltk.data.find(path)
+    except LookupError:
+        nltk.download(name)
+
+# Picks a single example resume from the dataset
+example_idx = 54  # or any other row 
+example_text = str(df.loc[example_idx, "Resume_str"])
+example_label = df.loc[example_idx, "Category"]
+
+print("=== Example Resume Parse Tree (NLTK) ===")
+print(f"Row index: {example_idx}")
+print(f"Category : {example_label}\n")
+
+print("Raw text snippet:")
+print(example_text[:500] + ("..." if len(example_text) > 500 else ""))
+print("\n---\n")
+
+# Use only the first sentence for readability
+sentences = nltk.sent_tokenize(example_text)
+if not sentences:
+    raise ValueError("No sentences found in this resume text.")
+sentence = sentences[0]
+print("Sentence used for parse:")
+print(sentence)
+print("\n---\n")
+
+# Tokenize and POS-tag
+tokens = nltk.word_tokenize(sentence)
+tagged_tokens = nltk.pos_tag(tokens)
+
+print("POS-tagged tokens:")
+print(tagged_tokens)
+print("\n---\n")
+
+# Chooses a small window of tokens to keep the tree narrow
+start = 3          # where to start in tagged_tokens
+window_size = 10   # how many tokens to include
+
+tagged_for_tree = tagged_tokens[start:start + window_size]
+
+print(f"Building parse tree from tokens {start} to {start + window_size - 1}:\n")
+print(tagged_for_tree)
+print("\n---\n")
+
+# Simple chunk grammar for a shallow parse tree (NP / VP / PP / CLAUSE)
+grammar = r"""
+  NP:     {<DT|PRP\$>?<JJ.*>*<NN.*>+}    # determiner/possessive + adjectives + noun(s)
+  PP:     {<IN><NP>}                     # preposition + NP
+  VP:     {<VB.*><NP|PP|CLAUSE>+}        # verb + NP/PP/CLAUSE
+  CLAUSE: {<NP><VP>}                     # NP + VP
+"""
+
+cp = nltk.RegexpParser(grammar)
+tree = cp.parse(tagged_for_tree)
+
+print("Chunk parse tree (ASCII, compact slice):\n")
+tree.pretty_print()
+
+# Bracketed representation too:
+print(tree)
+
+
+# In[5]:
+
+
+# Get your computer ready, things start heating up here...
 # Run CNN and BERT with our final chosen hyperparameters
 # These are calls to the run methods in BERT_for_comparison.py and CNN_for_comparison.py
-# Get your computer ready, things start heating up here...
 
 print("=== Running CNN ===")
 cnn_result = run_cnn(**CNN_PARAMS)
@@ -108,7 +203,7 @@ print("\n=== Running BERT ===")
 bert_result = run_bert(**BERT_PARAMS)
 
 
-# In[4]:
+# In[6]:
 
 
 # Summary metrics table for CNN vs BERT
@@ -138,10 +233,20 @@ summary_df = pd.DataFrame(summary_rows)
 summary_df
 
 
-# In[5]:
+# In[7]:
 
 
 # Accuracy / F1 and training time comparison
+# Library: Plotly Express (px.bar)
+# Title: "CNN vs BERT: Accuracy and F1"
+# What it shows: Side-by-side bars for accuracy and F1 for CNN vs BERT.
+# Data: summary_df melted into metrics_melted with columns model, metric, value.
+#
+# Total Training Time Bar Chart
+# Library: Plotly Express (px.bar)
+# Title: "CNN vs BERT: Total Training Time (seconds)"
+# What it shows: One bar per model for total training time in seconds.
+# Data: summary_df["total_training_time_sec"].
 
 # Melt accuracy/F1 for plotting
 metrics_melted = summary_df.melt(
@@ -175,10 +280,26 @@ fig_time.update_layout(yaxis_title="Time (sec)")
 fig_time.show()
 
 
-# In[7]:
+# In[8]:
 
 
-# Epoch loss and timing comparison
+# Training Loss per Epoch Line Chart
+# Library: Plotly Express (px.line)
+# Title: "Training Loss per Epoch: CNN vs BERT"
+# What it shows: 
+# X-axis: Epoch number
+# Y-axis: Training loss
+# Color: Model (CNN vs BERT)
+# Data: loss_df built from cnn_result["history"] and bert_result["history"].
+#
+# Epoch Duration per Epoch Line Chart
+# Library: Plotly Express (px.line)
+# Title: "Epoch Duration: CNN vs BERT"
+# What it shows:
+# X-axis: Epoch number
+# Y-axis: Seconds per epoch
+# Color: Model
+# Data: time_df from cnn_result["epoch_times"] and bert_result["epoch_times"].
 
 # Epoch indices (1..N)
 cnn_epochs = list(range(1, len(cnn_result["history"]) + 1))
@@ -224,10 +345,25 @@ fig_time_epochs.update_layout(xaxis_title="Epoch", yaxis_title="Time (sec)")
 fig_time_epochs.show()
 
 
-# In[11]:
+# In[9]:
 
 
 # Precision / Recall / F1 heatmaps for CNN and BERT
+
+# CNN Per-class Precision/Recall/F1 Heatmap
+# Library: Plotly Express (px.imshow)
+# Title: "CNN Per-class Precision / Recall / F1"
+# What it shows: Heatmap where:
+# Rows: class labels
+# Columns: precision, recall, f1
+# Color: metric value
+# Data: cnn_metrics_df derived from cnn_result["report"].
+
+# BERT Per-class Precision/Recall/F1 Heatmap
+# Library: Plotly Express (px.imshow)
+# Title: "BERT Per-class Precision / Recall / F1"
+# What it shows: Same structure as above but for BERT.
+# Data: bert_metrics_df from bert_result["report"].
 
 def per_class_metrics_df(result):
     report = result["report"]
@@ -271,10 +407,26 @@ fig_bert_metrics.update_layout(width=900, height=900)
 fig_bert_metrics.show()
 
 
-# In[12]:
+# In[10]:
 
 
 # Misclassification Sankey diagrams for CNN and BERT
+
+# CNN Misclassification Sankey Diagram
+# Library: Plotly Graph Objects (go.Sankey)
+# Title: "CNN Misclassification Flow (True → Pred)"
+# What it shows:
+# Left set of nodes: True: <class>
+# Right set of nodes: Pred: <class>
+# Links: Only misclassified flows (correct predictions are removed).
+# Link thickness: Number of misclassified samples moving from true class i to predicted class j.
+# Data: CNN confusion matrix (cm) computed inside make_misclassification_sankey.
+
+# BERT Misclassification Sankey Diagram
+# Library: Plotly Graph Objects (go.Sankey)
+# Title: "BERT Misclassification Flow (True → Pred)"
+# What it shows: Same structure as CNN Sankey but using bert_result["y_true"] / ["y_pred"].
+
 
 from sklearn.metrics import confusion_matrix
 import plotly.graph_objects as go
@@ -344,10 +496,25 @@ make_misclassification_sankey(
 )
 
 
-# In[6]:
+# In[11]:
 
 
 # Confusion matrices for CNN and BERT
+
+# CNN Confusion Matrix Heatmap
+# Library: Plotly Express (px.imshow)
+# Title: "CNN Confusion Matrix"
+# What it shows:
+# X-axis: Predicted class
+# Y-axis: True class
+# Cell text: counts
+# Data: cnn_cm = confusion_matrix(cnn_result["y_true"], cnn_result["y_pred"], labels=labels_idx).
+
+# BERT Confusion Matrix Heatmap
+# Library: Plotly Express (px.imshow)
+# Title: "BERT Confusion Matrix"
+# What it shows: Same as above but for BERT (bert_cm).
+
 
 # Get class names from both encoders and make sure they match as sets
 classes_cnn  = list(cnn_result["label_encoder"].classes_)
@@ -405,12 +572,21 @@ fig_bert_cm.show()
 
 
 
-# In[15]:
+# In[12]:
 
 
 # t-SNE on BERT [CLS] embeddings (test set)
-# Had to bring over even though I can't do this easily on CNN
-# Looks too cool to skip...
+
+# Library:
+# scikit-learn TSNE for dimensionality reduction
+# Plotly Express (px.scatter) for plotting
+# Title: "BERT t-SNE of [CLS] Embeddings (Test Set)"
+# What it shows:
+# Each point = one test-set resume’s [CLS] embedding reduced to 2D.
+# X/Y: t-SNE coordinates (tsne_x, tsne_y)
+# Color: label_name (class/category)
+# Data: CLS vectors extracted from bert_result["model"].bert on the test set built with ResumeDataset.
+
 
 from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader
@@ -481,54 +657,6 @@ fig_tsne = px.scatter(
 )
 fig_tsne.update_layout(width=900, height=800)
 fig_tsne.show()
-
-
-# In[1]:
-
-
-# DANGER CELL
-# MAY TAKE A LONG TIME TO RUN THESE TESTS
-
-# Hyperparameter sweep experiments
-# Passing some test parameters to the ..._for_comparison models 
-# Show the results in a chart
-# Runs both models multiple times with different max_len and num_epochs
-
-experiments = []
-
-for max_len in [128, 256]:
-    for num_epochs in [5, 10]:
-        print(f"\n=== Running CNN (max_len={max_len}, num_epochs={num_epochs}) ===")
-        cnn_res = run_cnn(
-            csv_path=csv_path,
-            max_len=max_len,
-            num_epochs=num_epochs,
-            batch_size=CNN_PARAMS["batch_size"]
-        )
-        experiments.append(cnn_res)
-
-        print(f"\n=== Running BERT (max_len={max_len}, num_epochs={num_epochs}) ===")
-        bert_res = run_bert(
-            csv_path=csv_path,
-            max_len=max_len,
-            num_epochs=num_epochs,
-            batch_size=BERT_PARAMS["batch_size"]
-        )
-        experiments.append(bert_res)
-
-# Build a summary DataFrame of all experiment runs
-rows = []
-for r in experiments:
-    rows.append({
-        "model": r["model_name"],
-        "max_len": r["max_len"],
-        "num_epochs": r["num_epochs"],
-        "accuracy": r["accuracy"],
-        "f1": r["f1"],
-    })
-
-exp_results_df = pd.DataFrame(rows)
-exp_results_df
 
 
 # In[ ]:
