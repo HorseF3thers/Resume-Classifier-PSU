@@ -173,8 +173,8 @@ def run_bert(
         history.append(avg_loss)
         print(
             f"[BERT] Epoch {epoch + 1}/{num_epochs} - "
-            f"Training Loss: {avg_loss:.4f} - "
-            f"Epoch Time: {epoch_duration:.2f} sec"
+            f"[BERT] Training Loss: {avg_loss:.4f} - "
+            f"[BERT] Epoch Time: {epoch_duration:.2f} sec"
         )
 
     total_training_time = time.time() - training_start_time
